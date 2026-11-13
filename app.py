@@ -20,7 +20,7 @@ if uploads:
     except RuntimeError as exc:
         st.error(str(exc))
         st.stop()
-    st.subheader("② 字段确认")
+    st.subheader("② 自动识别字段")
     confirmed = True
     mappings = {}
     for index, sheet in enumerate(sheets):
@@ -29,13 +29,22 @@ if uploads:
         options = ["（未指定）"] + sheet.headers
         defaults = build_mapping(sheet)
         mapping = {}
-        cols = st.columns(3)
-        for pos, field in enumerate((*REQUIRED_FIELDS, *OPTIONAL_FIELDS)):
-            default = defaults.get(field)
-            default_index = options.index(default) if default in options else 0
-            with cols[pos % 3]:
-                selected = st.selectbox(field, options, index=default_index, key=f"field_{index}_{field}")
-            mapping[field] = None if selected == "（未指定）" else selected
+        auto_missing = [field for field in REQUIRED_FIELDS if not defaults.get(field)]
+        if auto_missing:
+            st.warning(f"自动识别未完成：{', '.join(auto_missing)}。请展开下方设置手动指定。")
+        else:
+            matched = "、".join(f"{field}→{defaults[field]}" for field in (*REQUIRED_FIELDS, *OPTIONAL_FIELDS) if defaults.get(field))
+            st.success(f"已自动识别：{matched}")
+        with st.expander("字段设置（仅在需要修正时展开）", expanded=bool(auto_missing)):
+            cols = st.columns(3)
+            for pos, field in enumerate((*REQUIRED_FIELDS, *OPTIONAL_FIELDS)):
+                default = defaults.get(field)
+                default_index = options.index(default) if default in options else 0
+                with cols[pos % 3]:
+                    selected = st.selectbox(field, options, index=default_index, key=f"field_{index}_{field}")
+                mapping[field] = None if selected == "（未指定）" else selected
+        for field in (*REQUIRED_FIELDS, *OPTIONAL_FIELDS):
+            mapping.setdefault(field, defaults.get(field))
         result = validate_field_mapping(mapping, sheet.headers)
         if not result.valid:
             confirmed = False
